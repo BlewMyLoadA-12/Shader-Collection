@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grok's Cosmic Fish-Eye Vision</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .cosmic-pulse {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: cosmicRipple 3s ease-out forwards;
+        }
+        @keyframes cosmicRipple {
+            0% { transform: scale(0.2); opacity: 0.8; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+        .overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: rgba(200, 255, 255, 0.9);
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            text-shadow: 0 0 12px rgba(200, 255, 255, 0.7);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glCanvas"></canvas>
+    <div class="overlay">
+        <div>Grok's Cosmic Fish-Eye Interface</div>
+        <div style="font-size: 12px; opacity: 0.7;">Interact to probe the galaxy</div>
+    </div>
+    <script>
+        const canvas = document.getElementById('glCanvas');
+        const gl = canvas.getContext('webgl');
+
+        if (!gl) {
+            document.body.innerHTML = '<div style="color: white; text-align: center; margin-top: 50px;">WebGL not supported</div>';
+        }
+
+        // Resize canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Vertex Shader
+        const vertexShaderSource = `
+            attribute vec4 a_position;
+            attribute vec2 a_texCoord;
+            varying vec2 v_texCoord;
+            void main() {
+                gl_Position = a_position;
+                v_texCoord = a_texCoord;
+            }
+        `;
+
+        // Fragment Shader
+        const fragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform vec2 u_mouse;
+
+            // Hash function
+            vec3 hash3(vec2 p) {
+                vec3 q = vec3(dot(p, vec2(127.1, 311.7)),
+                              dot(p, vec2(269.5, 183.3)),
+                              dot(p, vec2(419.2, 371.9)));
+                return fract(sin(q) * 43758.5453);
+            }
+
+            // Noise
+            float noise(vec2 p) {
+                vec2 i = floor(p);
+                vec2 f = fract(p);
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(mix(dot(hash3(i + vec2(0.0, 0.0)).xy, f - vec2(0.0, 0.0)),
+                              dot(hash3(i + vec2(1.0, 0.0)).xy, f - vec2(1.0, 0.0)), u.x),
+                          mix(dot(hash3(i + vec2(0.0, 1.0)).xy, f - vec2(0.0, 1.0)),
+                              dot(hash3(i + vec2(1.0, 1.0)).xy, f - vec2(1.0, 1.0)), u.x), u.y);
+            }
+
+            // Fractal Brownian Motion
+            float fbm(vec2 p) {
+                float v = 0.0, a = 0.5;
+                for (int i = 0; i < 6; i++) {
+                    v += a * noise(p);
+                    p *= 2.1;
+                    a *= 0.45;
+                }
+                return v;
+            }
+
+            // Fish-eye distortion
+            vec2 fishEye(vec2 uv) {
+                vec2 center = vec2(0.5, 0.5);
+                vec2 p = uv - center;
+                float r = length(p);
+                float theta = atan(p.y, p.x);
+                float newR = r * (1.0 + 0.3 * sin(u_time * 0.5 + r * 5.0));
+                return center + newR * vec2(cos(theta), sin(theta));
+            }
+
+            // Cosmic lattice
+            float lattice(vec2 p) {
+                vec2 q = p * 10.0 + vec2(sin(u_time * 0.4), cos(u_time * 0.3));
+                float l = 0.15 * (sin(q.x * 3.1415) * cos(q.y * 3.1415));
+                l += 0.05 * fbm(q);
+                return clamp(l, 0.0, 1.0);
+            }
+
+            // Color palette with cosmic tones
+            vec3 palette(float t) {
+                return vec3(0.2, 0.4, 0.7) + vec3(0.6, 0.3, 0.9) * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))) + vec3(0.8, 0.6, 0.2) * 0.1;
+            }
+
+            void main() {
+                vec2 uv = v_texCoord;
+                vec2 p = fishEye(uv); // Apply fish-eye distortion
+                vec2 mousePos = (u_mouse / u_resolution.xy) * 2.0 - 1.0;
+                mousePos.y *= -u_resolution.y / u_resolution.x;
+
+                // Cosmic nebula background
+                float time = u_time * 0.2;
+                vec2 q = vec2(fbm(p + time * 0.3), fbm(p + vec2(time * 0.4, time * 0.6)));
+                float f = fbm(p + 4.0 * q);
+                vec3 nebula = palette(f + time * 0.1) * 0.6;
+
+                // Neural lattice overlay
+                float latticeEffect = lattice(p);
+                vec3 latticeColor = vec3(0.0, 0.8, 1.0) * latticeEffect * 0.9;
+
+                // Starfield with orbital trails
+                float stars = 0.0;
+                float starNoise = fract(sin(dot(p * 800.0, vec2(12.9898, 78.233))) * 43758.5453);
+                if (starNoise > 0.99) {
+                    float orbit = sin(u_time * 2.0 + starNoise * 20.0) * 0.4 + 0.6;
+                    stars = 0.9 * orbit * (0.5 + 0.5 * cos(u_time + starNoise * 15.0));
+                }
+
+                // Mouse-driven probe effect
+                float mouseDist = length(p - mousePos);
+                float probe = exp(-mouseDist * 6.0) * (cos(u_time * 10.0) * 0.5 + 0.5);
+                vec3 probeColor = vec3(1.0, 0.8, 0.5) * probe * 0.7;
+
+                // Combine layers
+                vec3 color = nebula + latticeColor + vec3(1.0) * stars + probeColor;
+
+                // Depth and vignette
+                float depth = length(p) * 0.8;
+                color = mix(color, vec3(0.1, 0.2, 0.3), depth * 0.4);
+                float vignette = smoothstep(0.0, 1.5, 1.0 - length(uv - 0.5));
+                color *= vignette;
+
+                // Final output
+                color = pow(color, vec3(0.9)) * 1.4;
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        // Create Shader
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        // Create Program
+        function createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                return null;
+            }
+            return program;
+        }
+
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const program = createProgram(gl, vertexShader, fragmentShader);
+
+        // Set up geometry
+        const positions = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+        const texCoords = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1]);
+
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+        const texCoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+
+        // Get locations
+        const positionLocation = gl.getAttribLocation(program, 'a_position');
+        const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+        const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
+        const timeLocation = gl.getUniformLocation(program, 'u_time');
+        const mouseLocation = gl.getUniformLocation(program, 'u_mouse');
+
+        // Mouse tracking and cosmic pulses
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = canvas.height - e.clientY;
+            if (e.buttons === 1) {
+                createCosmicPulse(e.clientX, e.clientY);
+            }
+        });
+
+        function createCosmicPulse(x, y) {
+            const pulse = document.createElement('div');
+            pulse.className = 'cosmic-pulse';
+            pulse.style.left = (x - 75) + 'px';
+            pulse.style.top = (y - 75) + 'px';
+            pulse.style.width = '150px';
+            pulse.style.height = '150px';
+            pulse.style.background = 'radial-gradient(circle, rgba(200, 150, 255, 0.6), transparent)';
+            pulse.style.boxShadow = '0 0 25px rgba(200, 150, 255, 0.4)';
+            document.body.appendChild(pulse);
+            setTimeout(() => {
+                if (pulse.parentNode) pulse.parentNode.removeChild(pulse);
+            }, 3000);
+        }
+
+        setInterval(() => {
+            if (Math.random() > 0.7) {
+                createCosmicPulse(Math.random() * window.innerWidth, Math.random() * window.innerHeight);
+            }
+        }, 1800);
+
+        // Render loop
+        function render(time) {
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.useProgram(program);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.enableVertexAttribArray(texCoordLocation);
+            gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+            gl.uniform1f(timeLocation, time * 0.001);
+            gl.uniform2f(mouseLocation, mouseX, mouseY);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            requestAnimationFrame(render);
+        }
+        requestAnimationFrame(render);
+    </script>
+</body>
+</html>
