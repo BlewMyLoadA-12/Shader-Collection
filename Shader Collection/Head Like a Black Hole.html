@@ -28,6 +28,7 @@
             padding: 15px;
             border-radius: 8px;
             font-size: 12px;
+            transition: opacity 0.3s ease;
         }
         
         .controls label {
@@ -48,6 +49,22 @@
             color: #fff;
             font-size: 18px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            transition: opacity 0.3s ease;
+        }
+        
+        .toggle-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            transition: opacity 0.3s ease;
+        }
+        
+        .ui-hidden {
+            opacity: 0;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -75,6 +92,7 @@
         </div>
     </div>
     
+    <div class="toggle-hint">Press Ctrl to Hide/Show</div>
     <div class="title">GRAVITATIONAL LENSING POV</div>
     
     <canvas id="canvas"></canvas>
@@ -325,6 +343,28 @@
         canvas.addEventListener('mousemove', (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
+        });
+
+        // UI toggle functionality
+        let uiVisible = true;
+        const uiElements = [
+            document.querySelector('.controls'),
+            document.querySelector('.title'),
+            document.querySelector('.toggle-hint')
+        ];
+
+        // Keyboard event listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Control') {
+                uiVisible = !uiVisible;
+                uiElements.forEach(element => {
+                    if (uiVisible) {
+                        element.classList.remove('ui-hidden');
+                    } else {
+                        element.classList.add('ui-hidden');
+                    }
+                });
+            }
         });
 
         // Control elements
