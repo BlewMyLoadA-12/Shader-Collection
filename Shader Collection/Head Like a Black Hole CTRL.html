@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Hole Vision - POV Shader</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: opacity 0.3s ease;
+        }
+        
+        .controls label {
+            display: block;
+            margin: 8px 0 4px 0;
+            color: #ccc;
+        }
+        
+        .controls input {
+            width: 120px;
+            margin-bottom: 8px;
+        }
+        
+        .title {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #fff;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            transition: opacity 0.3s ease;
+        }
+        
+        .toggle-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            transition: opacity 0.3s ease;
+        }
+        
+        .ui-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div style="font-weight: bold; margin-bottom: 12px; color: #fff;">BLACK HOLE VISION</div>
+        <label>Gravitational Strength:</label>
+        <input type="range" id="gravity" min="0.5" max="3.0" step="0.1" value="1.5">
+        
+        <label>Lensing Intensity:</label>
+        <input type="range" id="lensing" min="0.1" max="2.0" step="0.1" value="0.8">
+        
+        <label>Event Horizon Size:</label>
+        <input type="range" id="horizon" min="0.05" max="0.3" step="0.01" value="0.15">
+        
+        <label>Time Dilation:</label>
+        <input type="range" id="timeDilation" min="0.0" max="2.0" step="0.1" value="1.0">
+        
+        <label>Chromatic Shift:</label>
+        <input type="range" id="chromatic" min="0.0" max="1.0" step="0.05" value="0.4">
+        
+        <div style="margin-top: 12px; font-size: 10px; color: #888;">
+            Move mouse to look around<br>
+            Experience spacetime curvature
+        </div>
+    </div>
+    
+    <div class="toggle-hint">Press Ctrl to Hide/Show</div>
+    <div class="title">GRAVITATIONAL LENSING POV</div>
+    
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl');
+        
+        if (!gl) {
+            alert('WebGL not supported');
+        }
+
+        // Resize canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Vertex shader
+        const vertexShaderSource = `
+            attribute vec2 a_position;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+            }
+        `;
+
+        // Fragment shader - Black hole POV with gravitational lensing
+        const fragmentShaderSource = `
+            precision mediump float;
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform vec2 u_mouse;
+            uniform float u_gravity;
+            uniform float u_lensing;
+            uniform float u_horizon;
+            uniform float u_timeDilation;
+            uniform float u_chromatic;
+            
+            const float PI = 3.14159265359;
+            const float TWO_PI = 6.28318530718;
+            
+            // Noise function for cosmic background
+            float noise(vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+            }
+            
+            float smoothNoise(vec2 st) {
+                vec2 i = floor(st);
+                vec2 f = fract(st);
+                float a = noise(i);
+                float b = noise(i + vec2(1.0, 0.0));
+                float c = noise(i + vec2(0.0, 1.0));
+                float d = noise(i + vec2(1.0, 1.0));
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+            }
+            
+            // Fractal noise for cosmic structures
+            float fbm(vec2 st) {
+                float value = 0.0;
+                float amplitude = 0.5;
+                float frequency = 0.0;
+                for (int i = 0; i < 5; i++) {
+                    value += amplitude * smoothNoise(st);
+                    st *= 2.0;
+                    amplitude *= 0.5;
+                }
+                return value;
+            }
+            
+            // Generate cosmic background with stars and nebulae
+            vec3 cosmicBackground(vec2 uv) {
+                // Base space color
+                vec3 space = vec3(0.02, 0.02, 0.06);
+                
+                // Nebula clouds
+                float nebula = fbm(uv * 2.0 + u_time * 0.02);
+                vec3 nebulaColor = vec3(0.3, 0.1, 0.6) * nebula * 0.4;
+                
+                // Stars
+                float stars = smoothstep(0.95, 1.0, noise(uv * 50.0));
+                stars += smoothstep(0.98, 1.0, noise(uv * 20.0 + 1000.0)) * 0.5;
+                
+                // Distant galaxies
+                float galaxy = fbm(uv * 0.5 + vec2(100.0, 200.0)) * 0.3;
+                
+                return space + nebulaColor + vec3(stars) + vec3(galaxy * 0.2, galaxy * 0.3, galaxy * 0.1);
+            }
+            
+            // Gravitational lensing distortion
+            vec2 gravitationalLens(vec2 uv, vec2 center) {
+                vec2 delta = uv - center;
+                float dist = length(delta);
+                
+                // Schwarzschild radius effect
+                float rs = u_horizon;
+                if (dist < rs) {
+                    return center; // Inside event horizon
+                }
+                
+                // Gravitational lensing formula (simplified)
+                float lensStrength = u_gravity * rs * rs / (dist * dist);
+                float bendAngle = lensStrength * u_lensing;
+                
+                // Apply bending
+                float angle = atan(delta.y, delta.x);
+                float newDist = dist - bendAngle;
+                
+                // Multiple image formation (Einstein ring effect)
+                float ringEffect = sin(dist * 20.0 - u_time * 2.0) * 0.01 * u_lensing;
+                newDist += ringEffect;
+                
+                return center + vec2(cos(angle), sin(angle)) * newDist;
+            }
+            
+            // Doppler shift color modification
+            vec3 dopplerShift(vec3 color, float velocity) {
+                float shift = velocity * u_chromatic;
+                return vec3(
+                    color.r * (1.0 + shift * 0.3),
+                    color.g * (1.0 - abs(shift) * 0.1),
+                    color.b * (1.0 - shift * 0.3)
+                );
+            }
+            
+            void main() {
+                vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.x, u_resolution.y);
+                
+                // Mouse influence for looking around
+                vec2 mouse = (u_mouse - 0.5 * u_resolution.xy) / u_resolution.y;
+                uv += mouse * 0.5;
+                
+                // Black hole center (slightly offset based on mouse)
+                vec2 bhCenter = mouse * 0.2;
+                
+                // Apply gravitational lensing
+                vec2 lensedUV = gravitationalLens(uv, bhCenter);
+                
+                // Distance from black hole center
+                float distToCenter = length(uv - bhCenter);
+                
+                vec3 color;
+                
+                // Event horizon - pure black
+                if (distToCenter < u_horizon) {
+                    color = vec3(0.0);
+                } else {
+                    // Sample the cosmic background with lensing distortion
+                    color = cosmicBackground(lensedUV);
+                    
+                    // Time dilation effect - slower time near black hole
+                    float timeFactor = 1.0 / sqrt(1.0 - (u_horizon / distToCenter) * u_timeDilation);
+                    float distortedTime = u_time * timeFactor;
+                    
+                    // Add gravitational redshift
+                    float redshift = u_horizon / distToCenter;
+                    color = dopplerShift(color, redshift);
+                    
+                    // Photon sphere glow
+                    float photonSphere = u_horizon * 1.5;
+                    if (distToCenter > photonSphere - 0.1 && distToCenter < photonSphere + 0.1) {
+                        float glowIntensity = 1.0 - abs(distToCenter - photonSphere) / 0.1;
+                        color += vec3(1.0, 0.8, 0.3) * glowIntensity * 0.5;
+                    }
+                    
+                    // Accretion disk simulation
+                    float diskRadius = u_horizon * 3.0;
+                    if (distToCenter < diskRadius && distToCenter > u_horizon * 1.2) {
+                        float angle = atan(uv.y - bhCenter.y, uv.x - bhCenter.x);
+                        float spiral = sin(angle * 8.0 + distortedTime * 3.0 - distToCenter * 10.0);
+                        if (spiral > 0.3) {
+                            float diskGlow = (1.0 - distToCenter / diskRadius) * 0.3;
+                            color += vec3(1.0, 0.4, 0.1) * diskGlow;
+                        }
+                    }
+                    
+                    // Tidal distortion effect
+                    float tidalForce = u_gravity / (distToCenter * distToCenter);
+                    color *= (1.0 + sin(distortedTime * 4.0) * tidalForce * 0.1);
+                }
+                
+                // Vignette effect to enhance the POV feeling
+                float vignette = 1.0 - length(uv - mouse * 0.1) * 0.3;
+                color *= vignette;
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        // Compile shader
+        function compileShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            
+            return shader;
+        }
+
+        // Create program
+        const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error('Program link error:', gl.getProgramInfoLog(program));
+        }
+
+        // Set up geometry
+        const positions = new Float32Array([
+            -1, -1,
+             1, -1,
+            -1,  1,
+             1,  1,
+        ]);
+        
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+        // Get uniform locations
+        const uniforms = {
+            resolution: gl.getUniformLocation(program, 'u_resolution'),
+            time: gl.getUniformLocation(program, 'u_time'),
+            mouse: gl.getUniformLocation(program, 'u_mouse'),
+            gravity: gl.getUniformLocation(program, 'u_gravity'),
+            lensing: gl.getUniformLocation(program, 'u_lensing'),
+            horizon: gl.getUniformLocation(program, 'u_horizon'),
+            timeDilation: gl.getUniformLocation(program, 'u_timeDilation'),
+            chromatic: gl.getUniformLocation(program, 'u_chromatic')
+        };
+
+        // Mouse tracking
+        let mouse = { x: 0, y: 0 };
+        canvas.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        // UI toggle functionality
+        let uiVisible = true;
+        const uiElements = [
+            document.querySelector('.controls'),
+            document.querySelector('.title'),
+            document.querySelector('.toggle-hint')
+        ];
+
+        // Keyboard event listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Control') {
+                uiVisible = !uiVisible;
+                uiElements.forEach(element => {
+                    if (uiVisible) {
+                        element.classList.remove('ui-hidden');
+                    } else {
+                        element.classList.add('ui-hidden');
+                    }
+                });
+            }
+        });
+
+        // Control elements
+        const controls = {
+            gravity: document.getElementById('gravity'),
+            lensing: document.getElementById('lensing'),
+            horizon: document.getElementById('horizon'),
+            timeDilation: document.getElementById('timeDilation'),
+            chromatic: document.getElementById('chromatic')
+        };
+
+        // Render loop
+        function render(time) {
+            time *= 0.001; // Convert to seconds
+            
+            gl.useProgram(program);
+            
+            // Set up attributes
+            const positionLocation = gl.getAttribLocation(program, 'a_position');
+            gl.enableVertexAttribArray(positionLocation);
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // Set uniforms
+            gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
+            gl.uniform1f(uniforms.time, time);
+            gl.uniform2f(uniforms.mouse, mouse.x, mouse.y);
+            gl.uniform1f(uniforms.gravity, parseFloat(controls.gravity.value));
+            gl.uniform1f(uniforms.lensing, parseFloat(controls.lensing.value));
+            gl.uniform1f(uniforms.horizon, parseFloat(controls.horizon.value));
+            gl.uniform1f(uniforms.timeDilation, parseFloat(controls.timeDilation.value));
+            gl.uniform1f(uniforms.chromatic, parseFloat(controls.chromatic.value));
+            
+            // Draw
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            requestAnimationFrame(render);
+        }
+        
+        requestAnimationFrame(render);
+    </script>
+</body>
+</html>
