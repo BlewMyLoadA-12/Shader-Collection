@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminator Vision Shader - Control Version</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'OCR-A', monospace;
+            font-weight: bold;
+            overflow: hidden;
+            color: #ffffff;
+            cursor: none;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .scan-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 0, 0, 0.1) 2px,
+                rgba(255, 0, 0, 0.1) 4px
+            );
+            animation: scanlines 0.1s linear infinite;
+        }
+        
+        @keyframes scanlines {
+            0% { transform: translateY(0px); }
+            100% { transform: translateY(4px); }
+        }
+        
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 180px;
+            height: 180px;
+            pointer-events: auto;
+            transition: all 0.1s ease-out;
+        }
+        
+        .crosshair svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .crosshair.locked svg circle,
+        .crosshair.locked svg line {
+            animation: redFlicker 0.4s ease-in-out infinite alternate;
+        }
+        
+        @keyframes redFlicker {
+            0% {
+                stroke: #000000;
+            }
+            100% {
+                stroke: #ff0000;
+            }
+        }
+        
+        .target-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 14px;
+            line-height: 1.4;
+            text-shadow: 0 0 5px #ffffff;
+        }
+        
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        
+        .glitch {
+            animation: glitch 0.3s infinite;
+        }
+        
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+        
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="canvas"></canvas>
+        
+        <div class="hud-overlay">
+            <div class="scan-lines"></div>
+            
+            <div class="crosshair">
+                <svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Outer circle -->
+                    <circle cx="100" cy="100" r="90" fill="none" stroke="#000000" stroke-width="2"/>
+                    <!-- Inner circle -->
+                    <circle cx="100" cy="100" r="50" fill="none" stroke="#000000" stroke-width="2"/>
+                    <!-- Center vertical dash -->
+                    <line x1="100" y1="95" x2="100" y2="105" stroke="#000000" stroke-width="2"/>
+                    <!-- Horizontal line through inner circle (meets at center) -->
+                    <line x1="50" y1="100" x2="95" y2="100" stroke="#000000" stroke-width="2"/>
+                    <line x1="105" y1="100" x2="150" y2="100" stroke="#000000" stroke-width="2"/>
+                    <!-- Vertical line through outer circle (stops at inner circle) -->
+                    <line x1="100" y1="10" x2="100" y2="50" stroke="#000000" stroke-width="2"/>
+                    <line x1="100" y1="150" x2="100" y2="190" stroke="#000000" stroke-width="2"/>
+                </svg>
+            </div>
+            
+            <div class="target-info">
+                <div>CYBERDYNE SYSTEMS</div>
+                <div>SERIES T-800 MODEL 101</div>
+                <div>VERSION 2.4</div>
+                <div style="margin-top: 15px;">TARGET ACQUISITION: <span class="blink">SCANNING</span></div>
+                <div>THREAT ASSESSMENT: LOW</div>
+                <div>MISSION STATUS: ACTIVE</div>
+            </div>
+            
+            <div class="status-bar">
+                <div>POWER: 98%</div>
+                <div>CPU: 47%</div>
+                <div>MEMORY: 2047KB FREE</div>
+                <div>INFRARED: ACTIVE</div>
+                <div style="margin-top: 10px;">
+                    <span class="glitch">10 PRINT "SKYNET"</span><br>
+                    <span class="glitch">20 GOTO 10</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        
+        if (!gl) {
+            document.body.innerHTML = '<div style="color: red; text-align: center; margin-top: 50px;">WebGL not supported</div>';
+        }
+        
+        // Vertex shader source
+        const vertexShaderSource = `
+            attribute vec4 a_position;
+            attribute vec2 a_texCoord;
+            varying vec2 v_texCoord;
+            
+            void main() {
+                gl_Position = a_position;
+                v_texCoord = a_texCoord;
+            }
+        `;
+        
+        // Fragment shader source - Terminator vision effect
+        const fragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            
+            // Noise function
+            float noise(vec2 p) {
+                return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+            
+            void main() {
+                vec2 uv = v_texCoord;
+                vec2 screenPos = uv * u_resolution;
+                
+                // Base red tint for infrared vision
+                vec3 color = vec3(0.8, 0.1, 0.0);
+                
+                // Add some heat signature variation
+                float heat = sin(uv.x * 10.0 + u_time) * sin(uv.y * 15.0 + u_time * 0.7);
+                heat = (heat + 1.0) * 0.5; // Normalize to 0-1
+                
+                // Create heat zones
+                color += vec3(heat * 0.3, heat * 0.05, 0.0);
+                
+                // Add scanning effect
+                float scanLine = abs(sin(uv.y * 100.0 + u_time * 20.0));
+                if (scanLine > 0.98) {
+                    color += vec3(0.5, 0.1, 0.0);
+                }
+                
+                // Add digital noise/static
+                float staticNoise = noise(uv * 1000.0 + u_time) * 0.1;
+                color += vec3(staticNoise, staticNoise * 0.3, 0.0);
+                
+                // Add grid overlay
+                vec2 grid = abs(fract(uv * 50.0) - 0.5);
+                float gridLine = step(0.48, max(grid.x, grid.y));
+                color += vec3(gridLine * 0.1, 0.0, 0.0);
+                
+                // Add distance-based intensity
+                float dist = distance(uv, vec2(0.5, 0.5));
+                color *= (1.0 - dist * 0.3);
+                
+                // Vignette effect
+                float vignette = 1.0 - dist * 1.2;
+                color *= vignette;
+                
+                // Add chromatic aberration
+                color.r += sin(u_time + uv.x * 10.0) * 0.02;
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+        
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            
+            return shader;
+        }
+        
+        function createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                gl.deleteProgram(program);
+                return null;
+            }
+            
+            return program;
+        }
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        
+        // Create shaders and program
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const program = createProgram(gl, vertexShader, fragmentShader);
+        
+        // Set up geometry (full screen quad)
+        const positions = new Float32Array([
+            -1, -1,
+             1, -1,
+            -1,  1,
+            -1,  1,
+             1, -1,
+             1,  1,
+        ]);
+        
+        const texCoords = new Float32Array([
+            0, 0,
+            1, 0,
+            0, 1,
+            0, 1,
+            1, 0,
+            1, 1,
+        ]);
+        
+        // Create buffers
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        
+        const texCoordBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+        
+        // Get attribute and uniform locations
+        const positionLocation = gl.getAttribLocation(program, 'a_position');
+        const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+        const timeLocation = gl.getUniformLocation(program, 'u_time');
+        const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        function render(time) {
+            time *= 0.001; // Convert to seconds
+            
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            gl.useProgram(program);
+            
+            // Set up position attribute
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // Set up texture coordinate attribute
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.enableVertexAttribArray(texCoordLocation);
+            gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            // Set uniforms
+            gl.uniform1f(timeLocation, time);
+            gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+            
+            // Draw
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            
+            requestAnimationFrame(render);
+        }
+        
+        requestAnimationFrame(render);
+        
+        // Mouse control for crosshair
+        const crosshair = document.querySelector('.crosshair');
+        let isLocked = false;
+        let lockTimeout;
+        
+        // Mouse movement controls crosshair position
+        document.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            crosshair.style.left = x + '%';
+            crosshair.style.top = y + '%';
+        });
+        
+        // Click to activate lock/flicker effect
+        document.addEventListener('click', (e) => {
+            if (isLocked) {
+                // If already locked, unlock
+                crosshair.classList.remove('locked');
+                isLocked = false;
+                if (lockTimeout) {
+                    clearTimeout(lockTimeout);
+                    lockTimeout = null;
+                }
+            } else {
+                // Lock onto target
+                crosshair.classList.add('locked');
+                isLocked = true;
+                
+                // Auto-unlock after 3 seconds
+                lockTimeout = setTimeout(() => {
+                    crosshair.classList.remove('locked');
+                    isLocked = false;
+                    lockTimeout = null;
+                }, 3000);
+            }
+        });
+        
+        // Simulate target detection
+        setInterval(() => {
+            const scanningText = document.querySelector('.blink');
+            const statuses = ['SCANNING', 'TARGET ACQUIRED', 'ANALYZING', 'NO MATCH'];
+            scanningText.textContent = statuses[Math.floor(Math.random() * statuses.length)];
+        }, 2000);
+    </script>
+</body>
+</html>
